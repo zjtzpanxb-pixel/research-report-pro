@@ -280,10 +280,10 @@ class AnalystAgent:
     
     async def _call_llm(self, prompt: str) -> Dict:
         """调用 LLM（通过 OpenClaw 系统）"""
+        import httpx
+        
         if not httpx:
             raise ImportError("httpx 未安装")
-        
-        import httpx
         
         # OpenClaw 提供 LLM 服务，使用系统配置
         # 从环境变量读取 OpenClaw 的 LLM 配置
