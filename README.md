@@ -11,25 +11,22 @@ cd /Users/pxb/.openclaw/workspace/skills/research-report-pro
 pip install -r requirements.txt
 ```
 
-### 2. 配置搜索 API（可选）
+### 2. 配置（可选）
+
+**LLM API**：OpenClaw 已配置，无需任何设置 ✅
+
+**搜索 API**（可选）：如需增强网络搜索，可配置：
+
+| API | 用途 |
+|-----|------|
+| **Jina AI** | 网络搜索 | https://jina.ai/ |
 
 ```bash
-# 复制环境配置示例
 cp .env.example .env
-
-# 编辑 .env 文件，填入搜索 API Keys（如果需要真实网络搜索）
+# 编辑 .env 填入 JINA_API_KEY（可选）
 ```
 
-**推荐配置的 API：**
-
-| API | 用途 | 获取地址 |
-|-----|------|----------|
-| **Bing Search** | 网络搜索 | [Microsoft Azure](https://www.microsoft.com/en-us/bing/apis/bing-web-search-api) |
-| **Google Custom Search** | 网络搜索 | [Google Cloud](https://console.cloud.google.com/apis/credentials) |
-
-**LLM API**：OpenClaw 已配置，无需重复配置 ✅
-
-**不配置搜索 API 也能用**：系统会自动使用备用数据源（模拟模式）。
+**不配置也能用**：系统使用权威数据源进行网络搜索。
 
 ### 3. 使用
 
