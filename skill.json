@@ -3,17 +3,20 @@
   "version": "1.0.0",
   "description": "对话题进行全面深入研究和分析，生成标杆级报告",
   "author": "Skill Creator Pro Framework",
-  "entry": "main.py",
+  "entry": "openclaw_skill.py",
   "function": "run",
   "triggers": [
     "研究一下",
-    "分析",
+    "分析一下",
     "研究报告",
     "深度分析",
     "帮我研究",
     "行业研究",
     "政策分析",
-    "市场调研"
+    "市场调研",
+    "生成报告",
+    "写个报告",
+    "做个研究"
   ],
   "parameters": {
     "topic": {
