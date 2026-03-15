@@ -21,8 +21,8 @@ class AnalystAgent:
         self.llm_config = config.get('llm', {})
         self.frameworks = config.get('frameworks', ['PESTEL', 'SWOT', '波特五力'])
         
-        # API Key
-        self.api_key = os.getenv('LLM_API_KEY', '')
+        # OpenClaw 已配置 LLM API，直接使用
+        self.api_key = 'openclaw-provided'
     
     async def analyze(self, topic: str, sources: List[Dict], framework: str = 'PESTEL') -> Dict:
         """
@@ -110,7 +110,7 @@ class AnalystAgent:
                 'summary': self._summarize_pestel(result)
             }
         except Exception as e:
-            logger.error(f"PESTEL 分析失败：{e}")
+            logger.warning(f"PESTEL 分析失败（使用模拟数据）: {e}")
             return self._mock_pestel(topic)
     
     async def _swot_analysis(self, topic: str, context: str) -> Dict:
@@ -279,23 +279,28 @@ class AnalystAgent:
         return '\n\n'.join(context_parts)
     
     async def _call_llm(self, prompt: str) -> Dict:
-        """调用 LLM"""
-        if not self.api_key:
-            raise Exception("LLM_API_KEY 未配置")
-        
+        """调用 LLM（通过 OpenClaw 系统）"""
         if not httpx:
             raise ImportError("httpx 未安装")
         
         import httpx
         
-        url = "https://api.openai.com/v1/chat/completions"
+        # OpenClaw 提供 LLM 服务，使用系统配置
+        # 从环境变量读取 OpenClaw 的 LLM 配置
+        llm_base_url = os.getenv('OPENCLAW_LLM_BASE_URL', 'http://localhost:11434/v1/chat/completions')
+        llm_model = os.getenv('OPENCLAW_LLM_MODEL', 'qwen3.5-plus')
+        
         headers = {
-            "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
         
+        # 如果有 API Key（某些部署需要）
+        llm_api_key = os.getenv('OPENCLAW_LLM_API_KEY', '')
+        if llm_api_key:
+            headers['Authorization'] = f"Bearer {llm_api_key}"
+        
         payload = {
-            "model": "gpt-4o",
+            "model": llm_model,
             "messages": [
                 {"role": "system", "content": "你是专业的行业分析师，擅长使用各种分析框架进行深度研究。请输出纯 JSON 格式，不要 markdown。"},
                 {"role": "user", "content": prompt}
@@ -305,7 +310,7 @@ class AnalystAgent:
         }
         
         async with httpx.AsyncClient(timeout=120) as client:
-            response = await client.post(url, headers=headers, json=payload)
+            response = await client.post(llm_base_url, headers=headers, json=payload)
             response.raise_for_status()
             result = response.json()
             

@@ -11,13 +11,13 @@ cd /Users/pxb/.openclaw/workspace/skills/research-report-pro
 pip install -r requirements.txt
 ```
 
-### 2. 配置 API Keys（可选但推荐）
+### 2. 配置搜索 API（可选）
 
 ```bash
 # 复制环境配置示例
 cp .env.example .env
 
-# 编辑 .env 文件，填入你的 API Keys
+# 编辑 .env 文件，填入搜索 API Keys（如果需要真实网络搜索）
 ```
 
 **推荐配置的 API：**
@@ -26,9 +26,10 @@ cp .env.example .env
 |-----|------|----------|
 | **Bing Search** | 网络搜索 | [Microsoft Azure](https://www.microsoft.com/en-us/bing/apis/bing-web-search-api) |
 | **Google Custom Search** | 网络搜索 | [Google Cloud](https://console.cloud.google.com/apis/credentials) |
-| **OpenAI API** | 深度分析 | [OpenAI](https://platform.openai.com/api-keys) |
 
-**不配置也能用**：系统会自动使用备用数据源（模拟模式）。
+**LLM API**：OpenClaw 已配置，无需重复配置 ✅
+
+**不配置搜索 API 也能用**：系统会自动使用备用数据源（模拟模式）。
 
 ### 3. 使用
 
@@ -216,13 +217,15 @@ python main.py "人工智能发展" deep 技术 市场 政策 投资
 ### 环境变量
 
 ```bash
-# 搜索 API（至少配置一个）
+# 搜索 API（可选，至少配置一个）
 BING_SEARCH_API_KEY=xxx
 GOOGLE_SEARCH_API_KEY=xxx
 GOOGLE_CSE_ID=xxx
 
-# LLM API（推荐）
-LLM_API_KEY=xxx
+# LLM API - OpenClaw 已配置，无需重复设置
+# 如需自定义，可设置：
+# OPENCLAW_LLM_BASE_URL=...
+# OPENCLAW_LLM_MODEL=...
 
 # 其他
 OPENCLAW_WORKSPACE=/Users/pxb/.openclaw/workspace
@@ -259,9 +262,9 @@ LOG_LEVEL=INFO
 **症状**：分析报告使用模拟数据
 
 **解决**：
-1. 配置 `LLM_API_KEY` 环境变量
-2. 检查 API Key 是否有效
-3. 检查网络连接
+1. 检查 OpenClaw LLM 配置是否正常
+2. 检查网络连接
+3. 联系 OpenClaw 管理员
 
 ### 问题 3：依赖缺失
 
@@ -376,14 +379,13 @@ print(report['executive_summary'])
 
 **免费额度**：每天 100 次调用
 
-### OpenAI API
+### LLM API
 
-1. 访问 [OpenAI Platform](https://platform.openai.com/)
-2. 注册/登录账号
-3. 创建 API Key
-4. 充值账户
+OpenClaw 已配置 LLM API，无需单独配置。
 
-**建议**：使用 GPT-4o 或 GPT-3.5-turbo
+如需自定义模型或 endpoint，可设置环境变量：
+- `OPENCLAW_LLM_BASE_URL` - LLM 服务地址
+- `OPENCLAW_LLM_MODEL` - 使用的模型
 
 ---
 

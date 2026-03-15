@@ -651,21 +651,24 @@ class ResearchReportOrchestrator:
         return '\n'.join(lines)
     
     async def _call_llm(self, prompt: str) -> Dict:
-        """调用 LLM"""
-        api_key = os.getenv('LLM_API_KEY', '')
-        if not api_key:
-            raise Exception("LLM_API_KEY 未配置")
-        
+        """调用 LLM（通过 OpenClaw 系统）"""
         import httpx
         
-        url = "https://api.openai.com/v1/chat/completions"
+        # OpenClaw 提供 LLM 服务，使用系统配置
+        llm_base_url = os.getenv('OPENCLAW_LLM_BASE_URL', 'http://localhost:11434/v1/chat/completions')
+        llm_model = os.getenv('OPENCLAW_LLM_MODEL', 'qwen3.5-plus')
+        
         headers = {
-            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         
+        # 如果有 API Key（某些部署需要）
+        llm_api_key = os.getenv('OPENCLAW_LLM_API_KEY', '')
+        if llm_api_key:
+            headers['Authorization'] = f"Bearer {llm_api_key}"
+        
         payload = {
-            "model": "gpt-4o",
+            "model": llm_model,
             "messages": [
                 {"role": "system", "content": "你是专业的研究助手。请输出纯 JSON 格式，不要 markdown。"},
                 {"role": "user", "content": prompt}
@@ -675,7 +678,7 @@ class ResearchReportOrchestrator:
         }
         
         async with httpx.AsyncClient(timeout=60) as client:
-            response = await client.post(url, headers=headers, json=payload)
+            response = await client.post(llm_base_url, headers=headers, json=payload)
             response.raise_for_status()
             result = response.json()
             

@@ -44,7 +44,9 @@
     "生成人工智能行业发展报告",
     "深度分析跨境电商市场"
   ],
-  "env": {},
+  "env": {
+    "note": "OpenClaw 已配置 LLM API，无需额外配置"
+  },
   "dependencies": [
     "httpx>=0.24",
     "pyyaml>=6.0"
