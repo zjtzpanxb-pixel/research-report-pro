@@ -1,0 +1,86 @@
+# Research Report Pro - 配置文件
+
+# 环境配置
+environment: dev
+
+# LLM 配置
+llm:
+  primary: default
+  fallback: fallback
+  timeout: 180
+  max_retries: 3
+  base_delay: 1.0
+
+# 搜索配置
+search:
+  max_results: 50
+  credibility_filter: true
+  min_credibility: medium
+  parallel_queries: 5
+
+# 来源可信度分级
+credibility_tiers:
+  tier1:
+    - gov.cn
+    - stats.gov.cn
+    - 政府
+    - 国务院
+    - 发改委
+    - 工信部
+    - 国家统计局
+  tier2:
+    - edu.cn
+    - 知网
+    - 万方
+    - 社科院
+    - 学术
+    - 论文
+  tier3:
+    - 新华社
+    - 人民日报
+    - 财新
+    - 彭博
+    - 路透
+    - 权威媒体
+
+# 分析框架
+frameworks:
+  - PESTEL
+  - SWOT
+  - 波特五力
+  - 价值链分析
+
+# 成本配置
+cost:
+  daily_limit: 50
+  monthly_limit: 200
+  estimate_per_report:
+    standard: 5.0
+    deep: 10.0
+
+# 输出配置
+output:
+  workspace: /Users/pxb/.openclaw/workspace
+  reports_folder: /研究报告
+  format: markdown
+  include_citations: true
+  include_references: true
+
+# 质量配置
+quality:
+  min_credibility_ratio: 0.5
+  min_sources: 10
+  min_high_credibility: 5
+  required_sections:
+    - 执行摘要
+    - 行业概况
+    - 市场规模
+    - 竞争格局
+    - 发展趋势
+    - 结论建议
+
+# 日志配置
+logging:
+  level: INFO
+  format: json
+  path: /var/log/openclaw/research-report.log

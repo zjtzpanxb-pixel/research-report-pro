@@ -1,0 +1,49 @@
+{
+  "name": "research-report-pro",
+  "version": "1.0.0",
+  "description": "对话题进行全面深入研究和分析，生成标杆级报告",
+  "author": "Skill Creator Pro Framework",
+  "entry": "main.py",
+  "function": "run",
+  "triggers": [
+    "研究一下",
+    "分析",
+    "研究报告",
+    "深度分析",
+    "帮我研究",
+    "行业研究",
+    "政策分析",
+    "市场调研"
+  ],
+  "parameters": {
+    "topic": {
+      "type": "string",
+      "required": true,
+      "description": "研究话题"
+    },
+    "depth": {
+      "type": "string",
+      "required": false,
+      "enum": ["standard", "deep"],
+      "default": "deep",
+      "description": "研究深度"
+    },
+    "focus_areas": {
+      "type": "array",
+      "required": false,
+      "items": {"type": "string"},
+      "description": "关注领域"
+    }
+  },
+  "examples": [
+    "研究一下中国新能源汽车行业",
+    "分析十四五规划对数字经济的影响",
+    "生成人工智能行业发展报告",
+    "深度分析跨境电商市场"
+  ],
+  "env": {},
+  "dependencies": [
+    "httpx>=0.24",
+    "pyyaml>=6.0"
+  ]
+}
