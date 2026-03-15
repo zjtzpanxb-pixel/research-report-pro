@@ -23,8 +23,10 @@ logger = logging.getLogger('research-report-pro')
 
 # 添加 src 到路径
 sys.path.insert(0, str(Path(__file__).parent / 'src'))
+sys.path.insert(0, str(Path(__file__).parent))
 
-from orchestrator import ResearchReportOrchestrator
+# 使用绝对导入
+from src.orchestrator import ResearchReportOrchestrator
 
 
 def run(topic: str, depth: str = "deep", focus_areas: list = None):
