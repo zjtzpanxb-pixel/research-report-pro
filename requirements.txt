@@ -1,0 +1,14 @@
+# Research Report Pro - Python 依赖
+
+# HTTP 客户端
+httpx>=0.24.0
+
+# YAML 配置
+pyyaml>=6.0
+
+# 数据处理
+python-dateutil>=2.8.2
+
+# 可选：数据可视化
+# plotly>=5.14.0
+# matplotlib>=3.7.0
