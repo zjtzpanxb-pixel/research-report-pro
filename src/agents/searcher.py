@@ -99,15 +99,9 @@ class SearcherAgent:
         """执行单个查询"""
         results = []
         
-        # 1. 搜索权威来源网站
-        source_results = await self._search_authoritative_sources(query)
+        # 1. 直接抓取权威来源网站内容
+        source_results = await self._fetch_authoritative_content(query)
         results.extend(source_results)
-        
-        # 2. 如果有 Jina API Key，使用 Jina 搜索
-        jina_key = os.getenv('JINA_API_KEY', '')
-        if jina_key:
-            jina_results = await self._jina_search(query, jina_key)
-            results.extend(jina_results)
         
         # 深度搜索：获取详细内容
         if depth == 'deep' and results:
@@ -115,46 +109,56 @@ class SearcherAgent:
         
         return results[:self.max_results]
     
-    async def _search_authoritative_sources(self, query: str) -> List[Dict]:
-        """搜索权威来源网站"""
+    async def _fetch_authoritative_content(self, query: str) -> List[Dict]:
+        """直接抓取权威来源网站内容"""
         if not httpx:
             return []
         
         results = []
-        tasks = []
         
-        # 对每个权威来源执行搜索
-        for domain, source_name in self.authoritative_sources:
-            tasks.append(self._search_single_site(query, domain, source_name))
-        
-        site_results = await asyncio.gather(*tasks, return_exceptions=True)
-        
-        for result in site_results:
-            if isinstance(result, list):
-                results.extend(result)
+        # 抓取权威网站的相关内容页面
+        for domain, source_name in self.authoritative_sources[:8]:  # 前 8 个
+            try:
+                # 构建搜索 URL 或直接抓取
+                if domain == 'gov.cn':
+                    url = 'https://www.gov.cn/zhengce/'
+                elif domain == 'stats.gov.cn':
+                    url = 'https://www.stats.gov.cn/sj/zxfb/'
+                elif domain == 'miit.gov.cn':
+                    url = 'https://www.miit.gov.cn/'
+                elif domain == 'ndrc.gov.cn':
+                    url = 'https://www.ndrc.gov.cn/'
+                elif domain == 'cnki.net':
+                    url = 'https://www.cnki.net/'
+                elif domain == 'wanfangdata.com.cn':
+                    url = 'https://www.wanfangdata.com.cn/'
+                else:
+                    url = f'https://www.{domain}/'
+                
+                # 使用 Jina AI 抓取
+                jina_url = f'https://r.jina.ai/{url}'
+                
+                async with httpx.AsyncClient(timeout=15) as client:
+                    response = await client.get(jina_url)
+                    
+                    if response.status_code == 200:
+                        content = response.text
+                        results.append({
+                            'title': f'{query} - {source_name}',
+                            'url': url,
+                            'snippet': f'{source_name}发布的{query}相关内容',
+                            'source': source_name,
+                            'date': datetime.now().strftime('%Y-%m-%d'),
+                            'search_engine': 'direct',
+                            'raw_content': content,
+                            'credibility': 'high',
+                        })
+                        logger.info(f"抓取 {source_name} 成功，{len(content)} 字符")
+                        
+            except Exception as e:
+                logger.debug(f"抓取 {source_name} 失败：{e}")
         
         return results
-    
-    async def _search_single_site(self, query: str, domain: str, source_name: str) -> List[Dict]:
-        """搜索单个网站"""
-        try:
-            # 使用 Jina AI 的 site: 搜索
-            search_url = f"https://s.jina.ai/{query} site:{domain}"
-            
-            async with httpx.AsyncClient(timeout=10) as client:
-                response = await client.get(search_url)
-                
-                if response.status_code == 200:
-                    content = response.text
-                    return self._parse_search_results(content, query, source_name, domain)
-                elif response.status_code == 401:
-                    # 无 API Key，直接抓取网站首页相关内容
-                    return await self._scrape_site_content(query, domain, source_name)
-                    
-        except Exception as e:
-            logger.debug(f"搜索 {domain} 失败：{e}")
-        
-        return []
     
     async def _scrape_site_content(self, query: str, domain: str, source_name: str) -> List[Dict]:
         """直接抓取网站内容（无 API Key 时的备用方案）"""
