@@ -1,7 +1,7 @@
 """
 搜索专家 Agent - 多源数据采集
 
-使用 jina.ai 进行网络搜索
+使用真实网络搜索获取数据
 """
 
 import asyncio
@@ -10,6 +10,7 @@ import json
 from typing import Dict, List, Any, Optional
 from datetime import datetime
 import logging
+import re
 
 try:
     import httpx
@@ -27,6 +28,25 @@ class SearcherAgent:
         self.search_config = config.get('search', {})
         self.max_results = self.search_config.get('max_results', 50)
         self.timeout = self.search_config.get('timeout', 30)
+        
+        # 权威来源网站列表
+        self.authoritative_sources = [
+            # 政府/官方
+            ('gov.cn', '政府'),
+            ('stats.gov.cn', '国家统计局'),
+            ('miit.gov.cn', '工信部'),
+            ('ndrc.gov.cn', '发改委'),
+            ('mohurd.gov.cn', '住建部'),
+            # 学术
+            ('cnki.net', '中国知网'),
+            ('wanfangdata.com.cn', '万方数据'),
+            ('cssci.com.cn', 'CSSCI'),
+            # 媒体/行业
+            ('xinhuanet.com', '新华网'),
+            ('people.com.cn', '人民网'),
+            ('chinanews.com', '中新网'),
+            ('ce.cn', '中国经济网'),
+        ]
         
         # 可信来源关键词
         self.trusted_sources = {
@@ -46,7 +66,7 @@ class SearcherAgent:
         Returns:
             搜索结果列表
         """
-        logger.info(f"执行 {len(queries)} 个查询的搜索（使用 jina.ai）")
+        logger.info(f"执行 {len(queries)} 个查询的真实网络搜索")
         
         # 并发执行搜索
         tasks = []
@@ -79,12 +99,15 @@ class SearcherAgent:
         """执行单个查询"""
         results = []
         
-        try:
-            # 使用 jina.ai 搜索
-            jina_results = await self._jina_search(query)
+        # 1. 搜索权威来源网站
+        source_results = await self._search_authoritative_sources(query)
+        results.extend(source_results)
+        
+        # 2. 如果有 Jina API Key，使用 Jina 搜索
+        jina_key = os.getenv('JINA_API_KEY', '')
+        if jina_key:
+            jina_results = await self._jina_search(query, jina_key)
             results.extend(jina_results)
-        except Exception as e:
-            logger.warning(f"jina 搜索失败：{e}")
         
         # 深度搜索：获取详细内容
         if depth == 'deep' and results:
@@ -92,30 +115,86 @@ class SearcherAgent:
         
         return results[:self.max_results]
     
-    async def _jina_search(self, query: str) -> List[Dict]:
-        """使用 jina.ai 进行搜索"""
+    async def _search_authoritative_sources(self, query: str) -> List[Dict]:
+        """搜索权威来源网站"""
         if not httpx:
-            logger.warning("httpx 未安装，使用备用数据源")
-            return await self._fallback_search(query)
+            return []
         
-        try:
-            # 使用 jina.ai 的搜索服务
-            url = f"https://s.jina.ai/{query}"
-            
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(url)
-                response.raise_for_status()
-                content = response.text
-            
-            # 解析结果
-            return self._parse_jina_results(content, query)
-            
-        except Exception as e:
-            logger.debug(f"Jina 搜索失败：{e}")
-            return await self._fallback_search(query)
+        results = []
+        tasks = []
+        
+        # 对每个权威来源执行搜索
+        for domain, source_name in self.authoritative_sources:
+            tasks.append(self._search_single_site(query, domain, source_name))
+        
+        site_results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        for result in site_results:
+            if isinstance(result, list):
+                results.extend(result)
+        
+        return results
     
-    def _parse_jina_results(self, content: str, query: str) -> List[Dict]:
-        """解析 Jina 搜索结果"""
+    async def _search_single_site(self, query: str, domain: str, source_name: str) -> List[Dict]:
+        """搜索单个网站"""
+        try:
+            # 使用 Jina AI 的 site: 搜索
+            search_url = f"https://s.jina.ai/{query} site:{domain}"
+            
+            async with httpx.AsyncClient(timeout=10) as client:
+                response = await client.get(search_url)
+                
+                if response.status_code == 200:
+                    content = response.text
+                    return self._parse_search_results(content, query, source_name, domain)
+                elif response.status_code == 401:
+                    # 无 API Key，直接抓取网站首页相关内容
+                    return await self._scrape_site_content(query, domain, source_name)
+                    
+        except Exception as e:
+            logger.debug(f"搜索 {domain} 失败：{e}")
+        
+        return []
+    
+    async def _scrape_site_content(self, query: str, domain: str, source_name: str) -> List[Dict]:
+        """直接抓取网站内容（无 API Key 时的备用方案）"""
+        try:
+            # 抓取网站首页或搜索页面
+            if domain == 'gov.cn':
+                url = 'https://www.gov.cn/zhengce/'
+            elif domain == 'stats.gov.cn':
+                url = 'https://www.stats.gov.cn/sj/zxfb/'
+            elif domain == 'miit.gov.cn':
+                url = 'https://www.miit.gov.cn/'
+            elif domain == 'cnki.net':
+                url = 'https://www.cnki.net/'
+            else:
+                url = f'https://www.{domain}/'
+            
+            async with httpx.AsyncClient(timeout=10) as client:
+                # 使用 Jina AI 读取
+                jina_url = f"https://r.jina.ai/{url}"
+                response = await client.get(jina_url)
+                
+                if response.status_code == 200:
+                    content = response.text[:3000]
+                    return [{
+                        'title': f'{query} - {source_name}',
+                        'url': url,
+                        'snippet': f'{source_name}发布的{query}相关内容',
+                        'source': source_name,
+                        'date': datetime.now().strftime('%Y-%m-%d'),
+                        'search_engine': 'direct',
+                        'raw_content': content,
+                        'credibility': 'high',
+                    }]
+        except Exception as e:
+            logger.debug(f"抓取 {domain} 失败：{e}")
+        
+        return []
+    
+    def _parse_search_results(self, content: str, query: str, source_name: str, domain: str) -> List[Dict]:
+        """解析搜索结果"""
         results = []
         lines = content.split('\n')
         current_item = {}
@@ -123,22 +202,22 @@ class SearcherAgent:
         for line in lines:
             line = line.strip()
             if line.startswith('[') and '](' in line:
-                # 保存前一个结果
                 if current_item and current_item.get('title'):
                     results.append({
                         'title': current_item['title'],
                         'url': current_item['url'],
                         'snippet': current_item.get('snippet', '')[:500],
-                        'source': self._extract_source(current_item['url']),
+                        'source': source_name,
                         'date': current_item.get('date', ''),
                         'search_engine': 'jina',
                         'raw_content': '',
+                        'credibility': 'high',
                     })
+                    current_item = {}
                 
-                # 解析新结果
                 try:
                     title_end = line.index('](')
-                    title = line[1:title_end]
+                    title = line[1:title_end][:100]
                     url_start = title_end + 2
                     url_end = line.index(')', url_start)
                     url = line[url_start:url_end]
@@ -153,64 +232,67 @@ class SearcherAgent:
                     current_item = {}
             elif current_item and line and not line.startswith('#'):
                 current_item['snippet'] += line
-            
-        # 最后一个结果
+        
         if current_item and current_item.get('title'):
             results.append({
                 'title': current_item['title'],
                 'url': current_item['url'],
                 'snippet': current_item.get('snippet', '')[:500],
-                'source': self._extract_source(current_item['url']),
+                'source': source_name,
                 'date': current_item.get('date', ''),
                 'search_engine': 'jina',
                 'raw_content': '',
+                'credibility': 'high',
             })
         
-        logger.info(f"Jina 解析到 {len(results)} 个结果")
+        return results[:5]
+    
+    async def _jina_search(self, query: str, api_key: str) -> List[Dict]:
+        """使用 Jina AI 搜索（有 API Key 时）"""
+        if not httpx:
+            return []
+        
+        try:
+            url = f"https://s.jina.ai/{query}"
+            headers = {
+                'Authorization': f'Bearer {api_key}',
+                'Accept': 'application/json',
+            }
+            
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.get(url, headers=headers)
+                response.raise_for_status()
+                data = response.json()
+            
+            return self._parse_jina_api_results(data, query)
+            
+        except Exception as e:
+            logger.debug(f"Jina API 搜索失败：{e}")
+            return []
+    
+    def _parse_jina_api_results(self, data: Dict, query: str) -> List[Dict]:
+        """解析 Jina API 结果"""
+        results = []
+        
+        for item in data.get('data', []):
+            results.append({
+                'title': item.get('title', '')[:100],
+                'url': item.get('url', ''),
+                'snippet': item.get('content', item.get('snippet', ''))[:500],
+                'source': self._extract_source(item.get('url', '')),
+                'date': item.get('publishedTime', '')[:10] if item.get('publishedTime') else '',
+                'search_engine': 'jina_api',
+                'raw_content': item.get('content', ''),
+                'credibility': 'medium',
+            })
+        
         return results
     
-    async def _fallback_search(self, query: str) -> List[Dict]:
-        """备用搜索（权威数据源）"""
-        fallback_sources = [
-            {
-                'title': f'{query} - 国家统计局数据',
-                'url': 'https://www.stats.gov.cn/sj/zxfb/',
-                'snippet': f'国家统计局发布的{query}相关统计数据',
-                'source': '国家统计局',
-                'credibility': 'high',
-            },
-            {
-                'title': f'{query} - 国务院政策文件',
-                'url': 'https://www.gov.cn/zhengce/',
-                'snippet': f'国务院关于{query}的政策文件',
-                'source': '国务院',
-                'credibility': 'high',
-            },
-            {
-                'title': f'{query} - 学术论文',
-                'url': 'https://www.cnki.net/',
-                'snippet': f'知网收录的{query}相关学术论文',
-                'source': '中国知网',
-                'credibility': 'high',
-            },
-            {
-                'title': f'{query} - 行业报告',
-                'url': 'https://www.miit.gov.cn/',
-                'snippet': f'工信部发布的{query}行业报告',
-                'source': '工信部',
-                'credibility': 'high',
-            },
-        ]
-        
-        await asyncio.sleep(0.5)
-        return fallback_sources
-    
     async def _fetch_content(self, results: List[Dict]) -> List[Dict]:
-        """获取详细内容（使用 jina.ai）"""
+        """获取详细内容"""
         if not httpx:
             return results
         
-        # 限制并发数
         semaphore = asyncio.Semaphore(5)
         
         async def fetch_with_sem(result):
@@ -227,11 +309,11 @@ class SearcherAgent:
         return results
     
     async def _fetch_single(self, result: Dict) -> str:
-        """获取单个页面内容（使用 jina.ai）"""
+        """获取单个页面内容"""
         try:
             url = result.get('url', '')
             
-            # 使用 jina.ai 提取内容
+            # 使用 Jina AI 提取内容
             jina_url = f"https://r.jina.ai/{url}"
             
             async with httpx.AsyncClient(timeout=10) as client:
@@ -239,7 +321,6 @@ class SearcherAgent:
                 response.raise_for_status()
                 content = response.text
             
-            # 限制长度
             return content[:5000] if content else ''
             
         except Exception as e:
@@ -253,7 +334,6 @@ class SearcherAgent:
             parsed = urlparse(url)
             domain = parsed.netloc.lower()
             
-            # 移除 www.
             if domain.startswith('www.'):
                 domain = domain[4:]
             
@@ -262,25 +342,17 @@ class SearcherAgent:
             return 'unknown'
     
     def classify_source(self, url: str, title: str = '') -> Dict:
-        """
-        分类来源可信度
-        
-        Returns:
-            {'credibility': 'high|medium|low', 'tier': 'tier1|tier2|tier3', 'type': 'government|academic|media|other'}
-        """
+        """分类来源可信度"""
         text = (url + ' ' + title).lower()
         
-        # Tier 1: 政府/官方
         for keyword in self.trusted_sources['government']:
             if keyword.lower() in text:
                 return {'credibility': 'high', 'tier': 'tier1', 'type': 'government'}
         
-        # Tier 2: 学术
         for keyword in self.trusted_sources['academic']:
             if keyword.lower() in text:
                 return {'credibility': 'high', 'tier': 'tier2', 'type': 'academic'}
         
-        # Tier 3: 权威媒体
         for keyword in self.trusted_sources['media']:
             if keyword.lower() in text:
                 return {'credibility': 'medium', 'tier': 'tier3', 'type': 'media'}
